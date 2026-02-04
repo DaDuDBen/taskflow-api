@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 app = FastAPI()
+tasks_db = []
+task_id_counter = 1
 
 class Task(BaseModel):
     title: str
@@ -13,7 +15,19 @@ def root():
 
 @app.post("/tasks")
 def create_task(task: Task):
-    return {
-        "message": "Task created",
-        "task": task
+    global task_id_counter
+
+    new_task = {
+        "id": task_id_counter,
+        "title": task.title,
+        "description": task.description
     }
+
+    tasks_db.append(new_task)
+    task_id_counter += 1
+
+    return new_task
+
+@app.get("/tasks")
+def get_tasks():
+    return tasks_db
