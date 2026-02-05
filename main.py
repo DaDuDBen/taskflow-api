@@ -10,6 +10,10 @@ class Task(BaseModel):
     title: str
     description: str | None = None
 
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+
 @app.get("/")
 def root():
     return {"message": "TaskFlow API is alive"}
@@ -38,4 +42,16 @@ def get_task(task_id: int):
     for task in tasks_db:
         if task["id"] == task_id:
             return task
+    raise HTTPException(status_code=404, detail="Task not found")
+
+@app.put("/tasks/{task_id}")
+def update_task(task_id: int, updated_task: TaskUpdate):
+    for task in tasks_db:
+        if task["id"] == task_id:
+            if updated_task.title is not None:
+                task["title"] = updated_task.title
+            if updated_task.description is not None:
+                task["description"] = updated_task.description
+            return task
+
     raise HTTPException(status_code=404, detail="Task not found")
