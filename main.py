@@ -1,14 +1,27 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi import HTTPException
+from database import engine
+from models import Base
+from database import SessionLocal
+from sqlalchemy.orm import Session
+from fastapi import Depends
+from models import Task
+from schemas import TaskCreate, TaskResponse
+
+
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 tasks_db = []
 task_id_counter = 1
 
-class Task(BaseModel):
-    title: str
-    description: str | None = None
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 class TaskUpdate(BaseModel):
     title: str | None = None
@@ -30,20 +43,17 @@ def find_task_index(task_id: int):
 def root():
     return {"message": "TaskFlow API is alive"}
 
-@app.post("/tasks")
-def create_task(task: Task):
-    global task_id_counter
+@app.post("/tasks", response_model=TaskResponse)
+def create_task(task: TaskCreate, db: Session = Depends(get_db)):
+    db_task = Task(
+        title=task.title,
+        description=task.description
+    )
+    db.add(db_task)
+    db.commit()
+    db.refresh(db_task)
+    return db_task
 
-    new_task = {
-        "id": task_id_counter,
-        "title": task.title,
-        "description": task.description
-    }
-
-    tasks_db.append(new_task)
-    task_id_counter += 1
-
-    return new_task
 
 @app.get("/tasks")
 def get_tasks():
