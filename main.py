@@ -1,18 +1,26 @@
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from fastapi import HTTPException
 
 app = FastAPI()
+BASE_DIR = Path(__file__).resolve().parent
+app.mount("/ui", StaticFiles(directory=BASE_DIR / "frontend", html=True), name="frontend")
+
 tasks_db = []
 task_id_counter = 1
+
 
 class Task(BaseModel):
     title: str
     description: str | None = None
 
+
 class TaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
+
 
 def find_task_by_id(task_id: int):
     for task in tasks_db:
@@ -20,15 +28,18 @@ def find_task_by_id(task_id: int):
             return task
     return None
 
+
 def find_task_index(task_id: int):
     for index, task in enumerate(tasks_db):
         if task["id"] == task_id:
             return index
     return None
 
+
 @app.get("/")
 def root():
     return {"message": "TaskFlow API is alive"}
+
 
 @app.post("/tasks")
 def create_task(task: Task):
@@ -37,7 +48,7 @@ def create_task(task: Task):
     new_task = {
         "id": task_id_counter,
         "title": task.title,
-        "description": task.description
+        "description": task.description,
     }
 
     tasks_db.append(new_task)
@@ -45,9 +56,11 @@ def create_task(task: Task):
 
     return new_task
 
+
 @app.get("/tasks")
 def get_tasks():
     return tasks_db
+
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: int):
@@ -68,7 +81,7 @@ def update_task(task_id: int, updated_task: TaskUpdate):
         if updated_task.description is not None:
             task["description"] = updated_task.description
         return task
-    
+
 
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int):
@@ -77,7 +90,4 @@ def delete_task(task_id: int):
         raise HTTPException(status_code=404, detail="Task not found")
 
     deleted_task = tasks_db.pop(index)
-    return {
-        "message": "Task deleted",
-        "task": deleted_task
-    }
+    return {"message": "Task deleted", "task": deleted_task}
