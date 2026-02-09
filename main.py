@@ -55,39 +55,41 @@ def create_task(task: TaskCreate, db: Session = Depends(get_db)):
     return db_task
 
 
-@app.get("/tasks")
-def get_tasks():
-    return tasks_db
+@app.get("/tasks", response_model=list[TaskResponse])
+def get_tasks(db: Session = Depends(get_db)):
+    tasks = db.query(Task).all()
+    return tasks
 
-@app.get("/tasks/{task_id}")
-def get_task(task_id: int):
-    task = find_task_by_id(task_id)
+
+@app.get("/tasks/{task_id}", response_model=TaskResponse)
+def get_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
 
 
-@app.put("/tasks/{task_id}")
-def update_task(task_id: int, updated_task: TaskUpdate):
-    task = find_task_by_id(task_id)
+@app.put("/tasks/{task_id}", response_model=TaskResponse)
+def update_task(task_id: int, updated: TaskCreate, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
-    if task["id"] == task_id:
-        if updated_task.title is not None:
-            task["title"] = updated_task.title
-        if updated_task.description is not None:
-            task["description"] = updated_task.description
-        return task
+
+    task.title = updated.title
+    task.description = updated.description
+    db.commit()
+    db.refresh(task)
+    return task
+
     
 
 @app.delete("/tasks/{task_id}")
-def delete_task(task_id: int):
-    index = find_task_index(task_id)
-    if index is None:
+def delete_task(task_id: int, db: Session = Depends(get_db)):
+    task = db.query(Task).filter(Task.id == task_id).first()
+    if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    deleted_task = tasks_db.pop(index)
-    return {
-        "message": "Task deleted",
-        "task": deleted_task
-    }
+    db.delete(task)
+    db.commit()
+    return {"success": True, "message": "Task deleted"}
+
