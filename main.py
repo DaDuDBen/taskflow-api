@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 from models import Task
 from schemas import TaskCreate, TaskResponse
-
+from fastapi import Query
 
 Base.metadata.create_all(bind=engine)
 
@@ -55,10 +55,27 @@ def create_task(task: TaskCreate, db: Session = Depends(get_db)):
     return db_task
 
 
-@app.get("/tasks", response_model=list[TaskResponse])
-def get_tasks(db: Session = Depends(get_db)):
-    tasks = db.query(Task).all()
-    return tasks
+@app.get("/tasks")
+def get_tasks(
+    db: Session = Depends(get_db),
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0)
+):
+    total = db.query(Task).count()
+
+    tasks = (
+        db.query(Task)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "items": tasks
+    }
 
 
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
