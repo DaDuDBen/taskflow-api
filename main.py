@@ -59,12 +59,18 @@ def create_task(task: TaskCreate, db: Session = Depends(get_db)):
 def get_tasks(
     db: Session = Depends(get_db),
     limit: int = Query(10, ge=1, le=100),
-    offset: int = Query(0, ge=0)
+    offset: int = Query(0, ge=0),
+    title: str | None = None
 ):
-    total = db.query(Task).count()
+    query = db.query(Task)
+
+    if title:
+        query = query.filter(Task.title.ilike(f"%{title}%"))
+
+    total = query.count()
 
     tasks = (
-        db.query(Task)
+        query
         .offset(offset)
         .limit(limit)
         .all()
