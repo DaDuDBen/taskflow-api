@@ -7,7 +7,7 @@ from database import SessionLocal
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from models import Task
-from schemas import TaskCreate, TaskResponse
+from schemas import TaskCreate, TaskResponse, PaginatedTasks
 from fastapi import Query
 
 Base.metadata.create_all(bind=engine)
@@ -55,7 +55,7 @@ def create_task(task: TaskCreate, db: Session = Depends(get_db)):
     return db_task
 
 
-@app.get("/tasks")
+@app.get("/tasks", response_model=PaginatedTasks)
 def get_tasks(
     db: Session = Depends(get_db),
     limit: int = Query(10, ge=1, le=100),
