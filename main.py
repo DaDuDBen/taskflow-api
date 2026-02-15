@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-from fastapi import HTTPException
+from fastapi import HTTPException,status
 from database import engine
 from models import Base
 from database import SessionLocal
@@ -43,7 +43,7 @@ def find_task_index(task_id: int):
 def root():
     return {"message": "TaskFlow API is alive"}
 
-@app.post("/tasks", response_model=TaskResponse)
+@app.post("/tasks", response_model=TaskResponse,status_code=status.HTTP_201_CREATED)
 def create_task(task: TaskCreate, db: Session = Depends(get_db)):
     db_task = Task(
         title=task.title,
