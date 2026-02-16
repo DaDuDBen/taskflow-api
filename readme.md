@@ -153,4 +153,3 @@ username=alice&password=securepass123
 
 - The SQLite database file (`tasks.db`) is created automatically on first run.
 - `PUT /tasks/{task_id}` currently expects a full task payload (`title` and `description`).
-- Secret key configuration is currently hardcoded in `auth.py` and should be moved to environment variables for production use.
