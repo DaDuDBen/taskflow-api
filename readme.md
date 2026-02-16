@@ -1,14 +1,16 @@
 # TaskFlow API
 
-TaskFlow API is a lightweight REST service for managing tasks, built with **FastAPI**, **SQLAlchemy**, and **SQLite**.
+TaskFlow API is a lightweight task management backend built with **FastAPI**, **SQLAlchemy**, and **SQLite**. It includes JWT-based authentication and user-scoped task management.
 
 ## Features
 
-- Create, read, update, and delete tasks.
-- Request validation with Pydantic schemas.
+- User registration and login.
+- JWT access token authentication.
+- Full CRUD operations for tasks.
+- Per-user task isolation (users can only access their own tasks).
 - Paginated task listing with optional title filtering.
-- SQLite persistence (data stored in `tasks.db`).
-- Automatic interactive docs via Swagger UI and ReDoc.
+- Request and response validation with Pydantic schemas.
+- Interactive API docs via Swagger UI and ReDoc.
 
 ## Tech Stack
 
@@ -16,16 +18,20 @@ TaskFlow API is a lightweight REST service for managing tasks, built with **Fast
 - FastAPI
 - SQLAlchemy
 - SQLite
+- Pydantic
 - Uvicorn
+- python-jose + passlib (JWT and password hashing)
 
 ## Project Structure
 
 ```text
 .
-├── main.py       # FastAPI application and routes
-├── database.py   # Database engine/session setup
-├── models.py     # SQLAlchemy models
-├── schemas.py    # Pydantic request/response schemas
+├── main.py          # FastAPI app and route handlers
+├── auth.py          # Password hashing, token creation, auth dependency
+├── database.py      # Database engine/session setup
+├── models.py        # SQLAlchemy models
+├── schemas.py       # Pydantic request/response models
+├── requirements.txt # Project dependencies
 └── readme.md
 ```
 
@@ -34,7 +40,7 @@ TaskFlow API is a lightweight REST service for managing tasks, built with **Fast
 ### 1) Install dependencies
 
 ```bash
-pip install fastapi uvicorn sqlalchemy
+pip install -r requirements.txt
 ```
 
 ### 2) Run the API
@@ -46,21 +52,29 @@ uvicorn main:app --reload
 By default, the server runs at:
 
 - API base URL: `http://127.0.0.1:8000`
-- Swagger docs: `http://127.0.0.1:8000/docs`
-- ReDoc docs: `http://127.0.0.1:8000/redoc`
+- Swagger UI: `http://127.0.0.1:8000/docs`
+- ReDoc: `http://127.0.0.1:8000/redoc`
+
+## Authentication Flow
+
+1. Create a user with `POST /register`.
+2. Log in with `POST /login` using form fields (`username`, `password`) to receive a bearer token.
+3. Click **Authorize** in Swagger UI (or send an `Authorization: Bearer <token>` header) for protected task endpoints.
 
 ## API Endpoints
 
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/` | Health/root message |
-| `POST` | `/tasks` | Create a task |
-| `GET` | `/tasks` | List tasks with pagination and optional title filter |
-| `GET` | `/tasks/{task_id}` | Get a single task by ID |
-| `PUT` | `/tasks/{task_id}` | Update a task |
-| `DELETE` | `/tasks/{task_id}` | Delete a task |
+| Method | Endpoint | Auth Required | Description |
+|---|---|---|---|
+| `GET` | `/` | No | Health/root message |
+| `POST` | `/register` | No | Create a user account |
+| `POST` | `/login` | No | Get JWT token |
+| `POST` | `/tasks` | Yes | Create a task |
+| `GET` | `/tasks` | Yes | List tasks with pagination and optional title filter |
+| `GET` | `/tasks/{task_id}` | Yes | Get one task by ID |
+| `PUT` | `/tasks/{task_id}` | Yes | Update a task |
+| `DELETE` | `/tasks/{task_id}` | Yes | Delete a task |
 
-## Query Parameters for `GET /tasks`
+## Query Parameters (`GET /tasks`)
 
 - `limit` (default: `10`, min: `1`, max: `100`)
 - `offset` (default: `0`, min: `0`)
@@ -74,6 +88,34 @@ GET /tasks?limit=5&offset=0&title=report
 
 ## Request / Response Examples
 
+### Register
+
+**Request**
+
+```json
+{
+  "username": "alice",
+  "password": "securepass123"
+}
+```
+
+### Login
+
+**Request (`application/x-www-form-urlencoded`)**
+
+```text
+username=alice&password=securepass123
+```
+
+**Response (`200 OK`)**
+
+```json
+{
+  "access_token": "<jwt-token>",
+  "token_type": "bearer"
+}
+```
+
 ### Create Task
 
 **Request**
@@ -85,7 +127,7 @@ GET /tasks?limit=5&offset=0&title=report
 }
 ```
 
-**Response (`201 Created`)**
+**Response (`200 OK`)**
 
 ```json
 {
@@ -95,31 +137,20 @@ GET /tasks?limit=5&offset=0&title=report
 }
 ```
 
-### List Tasks
-
-**Response (`200 OK`)**
-
-```json
-{
-  "total": 1,
-  "limit": 10,
-  "offset": 0,
-  "items": [
-    {
-      "id": 1,
-      "title": "Prepare sprint report",
-      "description": "Summarize completed tickets and blockers"
-    }
-  ]
-}
-```
-
 ## Validation Rules
+
+### Task
 
 - `title`: required, 1 to 100 characters.
 - `description`: required, 1 to 500 characters.
 
+### User
+
+- `username`: required, 3 to 50 characters.
+- `password`: required, minimum 6 characters.
+
 ## Notes
 
 - The SQLite database file (`tasks.db`) is created automatically on first run.
-- `PUT /tasks/{task_id}` currently expects a full task payload (title + description).
+- `PUT /tasks/{task_id}` currently expects a full task payload (`title` and `description`).
+- Secret key configuration is currently hardcoded in `auth.py` and should be moved to environment variables for production use.
