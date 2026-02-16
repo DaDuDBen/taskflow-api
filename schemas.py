@@ -11,7 +11,7 @@ class TaskResponse(BaseModel):
     description: str
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class PaginatedTasks(BaseModel):
     total: int
@@ -20,4 +20,16 @@ class PaginatedTasks(BaseModel):
     items: List[TaskResponse]
 
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+class UserCreate(BaseModel):
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=6)
+
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str

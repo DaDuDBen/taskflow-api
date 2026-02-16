@@ -1,27 +1,17 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Query, Depends, HTTPException, status
 from pydantic import BaseModel
-from fastapi import HTTPException,status
-from database import engine
-from models import Base
-from database import SessionLocal
+from database import engine, SessionLocal, get_db
+from models import Base, User, Task
 from sqlalchemy.orm import Session
-from fastapi import Depends
-from models import Task
-from schemas import TaskCreate, TaskResponse, PaginatedTasks
-from fastapi import Query
+from schemas import TaskCreate, TaskResponse, PaginatedTasks, UserCreate, UserLogin, Token
+from auth import hash_password, verify_password, create_access_token, get_current_user
+from fastapi.security import OAuth2PasswordRequestForm
 
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 tasks_db = []
 task_id_counter = 1
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 class TaskUpdate(BaseModel):
     title: str | None = None
@@ -43,8 +33,12 @@ def find_task_index(task_id: int):
 def root():
     return {"message": "TaskFlow API is alive"}
 
-@app.post("/tasks", response_model=TaskResponse,status_code=status.HTTP_201_CREATED)
-def create_task(task: TaskCreate, db: Session = Depends(get_db)):
+@app.post("/tasks", response_model=TaskResponse)
+def create_task(
+    task: TaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     db_task = Task(
         title=task.title,
         description=task.description
@@ -116,3 +110,33 @@ def delete_task(task_id: int, db: Session = Depends(get_db)):
     db.commit()
     return {"success": True, "message": "Task deleted"}
 
+@app.post("/register")
+def register(user: UserCreate, db: Session = Depends(get_db)):
+    existing_user = db.query(User).filter(User.username == user.username).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Username already exists")
+
+    hashed_pw = hash_password(user.password)
+    new_user = User(username=user.username, hashed_password=hashed_pw)
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return {"message": "User created successfully"}
+
+@app.post("/login", response_model=Token)
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    db_user = db.query(User).filter(User.username == form_data.username).first()
+
+    if not db_user or not verify_password(form_data.password, db_user.hashed_password):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_access_token({"sub": db_user.username})
+
+    return {
+        "access_token": token,
+        "token_type": "bearer"
+    }
