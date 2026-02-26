@@ -1,16 +1,45 @@
 # TaskFlow API
 
-TaskFlow API is a lightweight task management backend built with **FastAPI**, **SQLAlchemy**, and **SQLite**. It includes JWT-based authentication and user-scoped task management.
+A lightweight, production-style task management backend built with **FastAPI**, **SQLAlchemy**, and **SQLite**.
+
+TaskFlow API provides:
+
+- JWT-based authentication
+- User-scoped task CRUD (each user can only access their own tasks)
+- Pagination and filtering for task lists
+- Strong request/response validation using Pydantic
+- Interactive API docs out of the box
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Running the API](#running-the-api)
+- [Authentication Flow](#authentication-flow)
+- [API Reference](#api-reference)
+- [Example cURL Workflow](#example-curl-workflow)
+- [Validation Rules](#validation-rules)
+- [Testing](#testing)
+- [Development Notes](#development-notes)
+
+---
 
 ## Features
 
-- User registration and login.
-- JWT access token authentication.
-- Full CRUD operations for tasks.
-- Per-user task isolation (users can only access their own tasks).
-- Paginated task listing with optional title filtering.
-- Request and response validation with Pydantic schemas.
-- Interactive API docs via Swagger UI and ReDoc.
+- **User registration & login**
+- **JWT access tokens** using `python-jose`
+- **Password hashing** using `passlib` + `bcrypt`
+- **Full task CRUD** (`create`, `read`, `update`, `delete`)
+- **Strict multi-user isolation** (querying by authenticated user)
+- **Pagination + filtering** on `GET /tasks`
+- **OpenAPI docs** via Swagger UI and ReDoc
+
+---
 
 ## Tech Stack
 
@@ -20,65 +49,139 @@ TaskFlow API is a lightweight task management backend built with **FastAPI**, **
 - SQLite
 - Pydantic
 - Uvicorn
-- python-jose + passlib (JWT and password hashing)
+- python-jose
+- passlib + bcrypt
+- pytest
+- ruff
+
+---
 
 ## Project Structure
 
 ```text
 .
-├── main.py          # FastAPI app and route handlers
-├── auth.py          # Password hashing, token creation, auth dependency
-├── database.py      # Database engine/session setup
-├── models.py        # SQLAlchemy models
-├── schemas.py       # Pydantic request/response models
-├── requirements.txt # Project dependencies
+├── main.py            # FastAPI app and route handlers
+├── auth.py            # Password hashing, JWT creation, current-user auth dependency
+├── config.py          # Environment-backed auth configuration
+├── database.py        # SQLAlchemy engine/session setup
+├── models.py          # SQLAlchemy models (User, Task)
+├── schemas.py         # Pydantic request/response models
+├── tests/             # API test suite
+├── requirements.txt   # Python dependencies
 └── readme.md
 ```
 
-## Getting Started
+---
 
-### 1) Install dependencies
+## Quick Start
+
+### 1) Create and activate a virtual environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### 2) Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2) Run the API
+### 3) Create an environment file
+
+Create a `.env` file in the project root:
+
+```env
+SECRET_KEY=replace-with-a-long-random-secret
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+```
+
+> `SECRET_KEY` is required for JWT signing.
+
+### 4) Run the server
 
 ```bash
 uvicorn main:app --reload
 ```
 
-By default, the server runs at:
+---
+
+## Configuration
+
+The app loads environment variables from `.env` using `python-dotenv`.
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SECRET_KEY` | Yes | _None_ | Secret used to sign JWT tokens |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `60` | Token expiration window in minutes |
+
+JWT algorithm is currently fixed to `HS256` in `config.py`.
+
+---
+
+## Running the API
+
+Once started, the API is available at:
 
 - API base URL: `http://127.0.0.1:8000`
 - Swagger UI: `http://127.0.0.1:8000/docs`
 - ReDoc: `http://127.0.0.1:8000/redoc`
 
+Health check/root endpoint:
+
+```http
+GET /
+```
+
+Response:
+
+```json
+{
+  "message": "TaskFlow API is alive"
+}
+```
+
+---
+
 ## Authentication Flow
 
-1. Create a user with `POST /register`.
-2. Log in with `POST /login` using form fields (`username`, `password`) to receive a bearer token.
-3. Click **Authorize** in Swagger UI (or send an `Authorization: Bearer <token>` header) for protected task endpoints.
+1. **Register** via `POST /register`
+2. **Login** via `POST /login` using form-encoded credentials
+3. Receive a bearer token:
+   ```json
+   {
+     "access_token": "<jwt-token>",
+     "token_type": "bearer"
+   }
+   ```
+4. Send token in headers for protected routes:
+   ```http
+   Authorization: Bearer <jwt-token>
+   ```
 
-## API Endpoints
+---
 
-| Method | Endpoint | Auth Required | Description |
+## API Reference
+
+| Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `GET` | `/` | No | Health/root message |
 | `POST` | `/register` | No | Create a user account |
-| `POST` | `/login` | No | Get JWT token |
+| `POST` | `/login` | No | Authenticate and get JWT token |
 | `POST` | `/tasks` | Yes | Create a task |
-| `GET` | `/tasks` | Yes | List tasks with pagination and optional title filter |
+| `GET` | `/tasks` | Yes | List tasks (with pagination/filtering) |
 | `GET` | `/tasks/{task_id}` | Yes | Get one task by ID |
-| `PUT` | `/tasks/{task_id}` | Yes | Update a task |
+| `PUT` | `/tasks/{task_id}` | Yes | Update an existing task |
 | `DELETE` | `/tasks/{task_id}` | Yes | Delete a task |
 
-## Query Parameters (`GET /tasks`)
+### `GET /tasks` query params
 
-- `limit` (default: `10`, min: `1`, max: `100`)
-- `offset` (default: `0`, min: `0`)
-- `title` (optional, case-insensitive partial match)
+| Parameter | Type | Default | Constraints | Description |
+|---|---|---|---|---|
+| `limit` | `int` | `10` | `1 <= limit <= 100` | Number of items to return |
+| `offset` | `int` | `0` | `offset >= 0` | Number of items to skip |
+| `title` | `str` | _None_ | Optional | Case-insensitive partial title match |
 
 Example:
 
@@ -86,70 +189,82 @@ Example:
 GET /tasks?limit=5&offset=0&title=report
 ```
 
-## Request / Response Examples
+---
+
+## Example cURL Workflow
 
 ### Register
 
-**Request**
-
-```json
-{
-  "username": "alice",
-  "password": "securepass123"
-}
+```bash
+curl -X POST http://127.0.0.1:8000/register \
+  -H "Content-Type: application/json" \
+  -d '{"username":"alice","password":"securepass123"}'
 ```
 
 ### Login
 
-**Request (`application/x-www-form-urlencoded`)**
-
-```text
-username=alice&password=securepass123
+```bash
+curl -X POST http://127.0.0.1:8000/login \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "username=alice&password=securepass123"
 ```
 
-**Response (`200 OK`)**
+Copy `access_token` from the response, then:
 
-```json
-{
-  "access_token": "<jwt-token>",
-  "token_type": "bearer"
-}
+```bash
+TOKEN="<paste-token-here>"
 ```
 
-### Create Task
+### Create a task
 
-**Request**
-
-```json
-{
-  "title": "Prepare sprint report",
-  "description": "Summarize completed tickets and blockers"
-}
+```bash
+curl -X POST http://127.0.0.1:8000/tasks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Prepare sprint report","description":"Summarize completed tickets and blockers"}'
 ```
 
-**Response (`200 OK`)**
+### List tasks
 
-```json
-{
-  "id": 1,
-  "title": "Prepare sprint report",
-  "description": "Summarize completed tickets and blockers"
-}
+```bash
+curl -X GET "http://127.0.0.1:8000/tasks?limit=10&offset=0" \
+  -H "Authorization: Bearer $TOKEN"
 ```
+
+---
 
 ## Validation Rules
 
-### Task
-
-- `title`: required, 1 to 100 characters.
-- `description`: required, 1 to 500 characters.
-
 ### User
 
-- `username`: required, 3 to 50 characters.
-- `password`: required, minimum 6 characters.
+- `username`: required, 3 to 50 characters
+- `password`: required, minimum 6 characters
 
-## Notes
+### Task
 
-- The SQLite database file (`tasks.db`) is created automatically on first run.
-- `PUT /tasks/{task_id}` currently expects a full task payload (`title` and `description`).
+- `title`: required, 1 to 100 characters
+- `description`: required, 1 to 500 characters
+
+---
+
+## Testing
+
+Run all tests:
+
+```bash
+pytest
+```
+
+Run lint checks:
+
+```bash
+ruff check .
+```
+
+---
+
+## Development Notes
+
+- SQLite database file (`tasks.db`) is created automatically on first run.
+- `PUT /tasks/{task_id}` currently expects a **full payload** (`title` + `description`), not a partial patch.
+- The root endpoint can be used as a simple uptime/health probe.
