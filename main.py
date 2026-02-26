@@ -1,11 +1,12 @@
-from fastapi import FastAPI, Query, Depends, HTTPException, status
-from pydantic import BaseModel
-from database import engine, SessionLocal, get_db
-from models import Base, User, Task
-from sqlalchemy.orm import Session
-from schemas import TaskCreate, TaskResponse, PaginatedTasks, UserCreate, UserLogin, Token
-from auth import hash_password, verify_password, create_access_token, get_current_user
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from auth import create_access_token, get_current_user, hash_password, verify_password
+from database import engine, get_db
+from models import Base, Task, User
+from schemas import PaginatedTasks, TaskCreate, TaskResponse, Token, UserCreate
 
 Base.metadata.create_all(bind=engine)
 
@@ -13,9 +14,11 @@ app = FastAPI()
 tasks_db = []
 task_id_counter = 1
 
+
 class TaskUpdate(BaseModel):
     title: str | None = None
     description: str | None = None
+
 
 def find_task_by_id(task_id: int):
     for task in tasks_db:
@@ -23,27 +26,26 @@ def find_task_by_id(task_id: int):
             return task
     return None
 
+
 def find_task_index(task_id: int):
     for index, task in enumerate(tasks_db):
         if task["id"] == task_id:
             return index
     return None
 
+
 @app.get("/")
 def root():
     return {"message": "TaskFlow API is alive"}
+
 
 @app.post("/tasks", response_model=TaskResponse)
 def create_task(
     task: TaskCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    db_task = Task(
-        title=task.title,
-        description=task.description,
-        user_id=current_user.id
-    )
+    db_task = Task(title=task.title, description=task.description, user_id=current_user.id)
 
     db.add(db_task)
     db.commit()
@@ -57,36 +59,27 @@ def get_tasks(
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
     title: str | None = None,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     query = db.query(Task).filter(Task.user_id == current_user.id)
-
 
     if title:
         query = query.filter(Task.title.ilike(f"%{title}%"))
 
     total = query.count()
 
-    tasks = (
-        query
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    tasks = query.offset(offset).limit(limit).all()
 
-    return {
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-        "items": tasks
-    }
+    return {"total": total, "limit": limit, "offset": offset, "items": tasks}
 
 
 @app.get("/tasks/{task_id}", response_model=TaskResponse)
-def get_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    task = db.query(Task).filter(
-    Task.id == task_id,
-    Task.user_id == current_user.id).first()
+def get_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
 
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -94,10 +87,13 @@ def get_task(task_id: int, db: Session = Depends(get_db), current_user: User = D
 
 
 @app.put("/tasks/{task_id}", response_model=TaskResponse)
-def update_task(task_id: int, updated: TaskCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    task = db.query(Task).filter(
-    Task.id == task_id,
-    Task.user_id == current_user.id).first()
+def update_task(
+    task_id: int,
+    updated: TaskCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
@@ -107,19 +103,21 @@ def update_task(task_id: int, updated: TaskCreate, db: Session = Depends(get_db)
     db.refresh(task)
     return task
 
-    
 
 @app.delete("/tasks/{task_id}")
-def delete_task(task_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    task = db.query(Task).filter(
-    Task.id == task_id,
-    Task.user_id == current_user.id).first()
+def delete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    task = db.query(Task).filter(Task.id == task_id, Task.user_id == current_user.id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
     db.delete(task)
     db.commit()
     return {"success": True, "message": "Task deleted"}
+
 
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
@@ -135,10 +133,11 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 
     return {"message": "User created successfully"}
 
+
 @app.post("/login", response_model=Token)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     db_user = db.query(User).filter(User.username == form_data.username).first()
 
@@ -147,7 +146,4 @@ def login(
 
     token = create_access_token({"sub": db_user.username})
 
-    return {
-        "access_token": token,
-        "token_type": "bearer"
-    }
+    return {"access_token": token, "token_type": "bearer"}
